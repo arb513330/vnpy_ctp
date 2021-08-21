@@ -1,4 +1,5 @@
 import platform
+from sys import version_info
 
 from setuptools import Extension, setup
 
@@ -7,20 +8,31 @@ def get_ext_modules() -> list:
     """
     获取三方模块
 
-    Linux需要编译封装接口
-    Windows直接使用预编译的pyd即可
+    Linux、Windows需要编译封装接口
     Mac由于缺乏二进制库支持无法使用
     """
-    if platform.system() != "Linux":
-        return []
-
-    compiler_flags = [
-        "-std=c++17",
-        "-O3",
-        "-Wno-delete-incomplete", "-Wno-sign-compare",
-    ]
-    extra_link_args = ["-lstdc++"]
-    runtime_library_dirs = ["$ORIGIN"]
+    if platform.uname().system == "Windows":
+        if version_info.major == 3 and version_info.minor == 7:
+            return []
+        compiler_flags = [
+            "/MP", "/std:c++17",  # standard
+            "/O2", "/Ob2", "/Oi", "/Ot", "/Oy", "/GL",  # Optimization
+            "/bigobj",  # Better compatibility
+            "/wd4819",  # 936 code page
+            "/D_CRT_SECURE_NO_WARNINGS",
+            # suppress warning of unsafe functions like fopen, strcpy, etc
+            "/D_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING"
+        ]
+        extra_link_args = []
+        runtime_library_dirs = None
+    else:
+        compiler_flags = [
+            "-std=c++17",  # standard
+            "-O3",  # Optimization
+            "-Wno-delete-incomplete", "-Wno-sign-compare",
+        ]
+        extra_link_args = ["-lstdc++"]
+        runtime_library_dirs = ["$ORIGIN"]
 
     vnctpmd = Extension(
         "vnpy_ctp.api.vnctpmd",
