@@ -31,6 +31,9 @@ from vnpy.trader.event import EVENT_TIMER
 from ..api import (
     MdApi,
     TdApi,
+    THOST_FTDC_OAS_Submitted,
+    THOST_FTDC_OAS_Accepted,
+    THOST_FTDC_OAS_Rejected,
     THOST_FTDC_OST_NoTradeQueueing,
     THOST_FTDC_OST_PartTradedQueueing,
     THOST_FTDC_OST_AllTraded,
@@ -42,6 +45,7 @@ from ..api import (
     THOST_FTDC_PD_Short,
     THOST_FTDC_OPT_LimitPrice,
     THOST_FTDC_OPT_AnyPrice,
+    THOST_FTDC_OPT_FiveLevelPrice,
     THOST_FTDC_OF_Open,
     THOST_FTDC_OFEN_Close,
     THOST_FTDC_OFEN_CloseYesterday,
@@ -65,6 +69,9 @@ from ..api import (
 
 # 委托状态映射
 STATUS_CTP2VT: dict[str, Status] = {
+    THOST_FTDC_OAS_Submitted: Status.SUBMITTING,
+    THOST_FTDC_OAS_Accepted: Status.SUBMITTING,
+    THOST_FTDC_OAS_Rejected: Status.REJECTED,
     THOST_FTDC_OST_NoTradeQueueing: Status.NOTTRADED,
     THOST_FTDC_OST_PartTradedQueueing: Status.PARTTRADED,
     THOST_FTDC_OST_AllTraded: Status.ALLTRADED,
@@ -82,13 +89,39 @@ DIRECTION_CTP2VT[THOST_FTDC_PD_Long] = Direction.LONG
 DIRECTION_CTP2VT[THOST_FTDC_PD_Short] = Direction.SHORT
 
 # 委托类型映射
-ORDERTYPE_VT2CTP: dict[OrderType, tuple] = {
-    OrderType.LIMIT: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
-    OrderType.MARKET: (THOST_FTDC_OPT_AnyPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
-    OrderType.FAK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_AV),
-    OrderType.FOK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_CV),
+ORDERTYPE_VT2CTP: dict[Exchange, dict[OrderType, Tuple]] = {
+    Exchange.SHFE: {
+        OrderType.LIMIT: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.FAK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_AV),
+        OrderType.FOK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_CV),
+    },
+    Exchange.INE: {
+        OrderType.LIMIT: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.FAK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_AV),
+        OrderType.FOK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_CV),
+    },
+    Exchange.CZCE: {
+        OrderType.LIMIT: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.MARKET: (THOST_FTDC_OPT_AnyPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.FAK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_AV),
+        OrderType.FOK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_CV),
+    },
+    Exchange.DCE: {
+        OrderType.LIMIT: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.MARKET: (THOST_FTDC_OPT_AnyPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.FAK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_AV),
+        OrderType.FOK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_CV),
+    },
+    Exchange.CFFEX: {
+        OrderType.LIMIT: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.MARKET: (THOST_FTDC_OPT_FiveLevelPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.FAK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_AV),
+        OrderType.FOK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_CV),
+    },
 }
-ORDERTYPE_CTP2VT: dict[tuple, OrderType] = {v: k for k, v in ORDERTYPE_VT2CTP.items()}
+ORDERTYPE_CTP2VT: Dict[Tuple, OrderType] = {}
+for exchange_mapping in ORDERTYPE_VT2CTP.values():
+    ORDERTYPE_CTP2VT.update({v: k for k, v in exchange_mapping.items()})
 
 # 开平方向映射
 OFFSET_VT2CTP: dict[Offset, str] = {
@@ -311,8 +344,7 @@ class CtpMdApi(MdApi):
             date_str: str = data["ActionDay"]
 
         timestamp: str = f"{date_str} {data['UpdateTime']}.{data['UpdateMillisec']}"
-        dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S.%f")
-        dt: datetime = dt.replace(tzinfo=CHINA_TZ)
+        dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S.%f").replace(tzinfo=CHINA_TZ)
 
         tick: TickData = TickData(
             symbol=symbol,
@@ -662,8 +694,7 @@ class CtpTdApi(TdApi):
             return
 
         timestamp: str = f"{data['InsertDate']} {data['InsertTime']}"
-        dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
-        dt: datetime = dt.replace(tzinfo=CHINA_TZ)
+        dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S").replace(tzinfo=CHINA_TZ)
 
         tp: tuple = (data["OrderPriceType"], data["TimeCondition"], data["VolumeCondition"])
         order_type: OrderType = ORDERTYPE_CTP2VT.get(tp, None)
@@ -701,8 +732,8 @@ class CtpTdApi(TdApi):
         orderid: str = self.sysid_orderid_map[data["OrderSysID"]]
 
         timestamp: str = f"{data['TradeDate']} {data['TradeTime']}"
-        dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
-        dt: datetime = dt.replace(tzinfo=CHINA_TZ)
+        dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S").replace(tzinfo=CHINA_TZ)
+        dt: datetime = dt
 
         trade: TradeData = TradeData(
             symbol=symbol,
@@ -783,14 +814,13 @@ class CtpTdApi(TdApi):
             self.gateway.write_log("请选择开平方向")
             return ""
 
-        if req.type not in ORDERTYPE_VT2CTP:
-            self.gateway.write_log(f"当前接口不支持该类型的委托{req.type.value}")
+        if req.type not in ORDERTYPE_VT2CTP[req.exchange]:
+            self.gateway.write_log(f"交易所{req.exchange.value}不支持该类型的委托{req.type.value}")
             return ""
 
         self.order_ref += 1
 
-        tp: tuple = ORDERTYPE_VT2CTP[req.type]
-        price_type, time_condition, volume_condition = tp
+        price_type, time_condition, volume_condition = ORDERTYPE_VT2CTP[req.exchange][req.type]
 
         ctp_req: dict = {
             "InstrumentID": req.symbol,
