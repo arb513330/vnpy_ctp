@@ -46,6 +46,7 @@ from ..api import (
     THOST_FTDC_PD_Short,
     THOST_FTDC_OPT_LimitPrice,
     THOST_FTDC_OPT_AnyPrice,
+    THOST_FTDC_OPT_FiveLevelPrice,
     THOST_FTDC_OF_Open,
     THOST_FTDC_OFEN_Close,
     THOST_FTDC_OFEN_CloseYesterday,
@@ -88,13 +89,39 @@ DIRECTION_CTP2VT[THOST_FTDC_PD_Long] = Direction.LONG
 DIRECTION_CTP2VT[THOST_FTDC_PD_Short] = Direction.SHORT
 
 # 委托类型映射
-ORDERTYPE_VT2CTP: Dict[OrderType, Tuple] = {
-    OrderType.LIMIT: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
-    OrderType.MARKET: (THOST_FTDC_OPT_AnyPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
-    OrderType.FAK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_AV),
-    OrderType.FOK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_CV),
+ORDERTYPE_VT2CTP: Dict[Exchange, Dict[OrderType, Tuple]] = {
+    Exchange.SHFE: {
+        OrderType.LIMIT: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.FAK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_AV),
+        OrderType.FOK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_CV),
+    },
+    Exchange.INE: {
+        OrderType.LIMIT: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.FAK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_AV),
+        OrderType.FOK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_CV),
+    },
+    Exchange.CZCE: {
+        OrderType.LIMIT: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.MARKET: (THOST_FTDC_OPT_AnyPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.FAK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_AV),
+        OrderType.FOK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_CV),
+    },
+    Exchange.DCE: {
+        OrderType.LIMIT: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.MARKET: (THOST_FTDC_OPT_AnyPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.FAK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_AV),
+        OrderType.FOK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_CV),
+    },
+    Exchange.CFFEX: {
+        OrderType.LIMIT: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.MARKET: (THOST_FTDC_OPT_FiveLevelPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
+        OrderType.FAK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_AV),
+        OrderType.FOK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_CV),
+    },
 }
-ORDERTYPE_CTP2VT: Dict[Tuple, OrderType] = {v: k for k, v in ORDERTYPE_VT2CTP.items()}
+ORDERTYPE_CTP2VT: Dict[Tuple, OrderType] = {}
+for exchange_mapping in ORDERTYPE_VT2CTP.values():
+    ORDERTYPE_CTP2VT.update({v: k for k, v in exchange_mapping.items()})
 
 # 开平方向映射
 OFFSET_VT2CTP: Dict[Offset, str] = {
@@ -773,14 +800,13 @@ class CtpTdApi(TdApi):
             self.gateway.write_log("请选择开平方向")
             return ""
 
-        if req.type not in ORDERTYPE_VT2CTP:
-            self.gateway.write_log(f"当前接口不支持该类型的委托{req.type.value}")
+        if req.type not in ORDERTYPE_VT2CTP[req.exchange]:
+            self.gateway.write_log(f"交易所{req.exchange.value}不支持该类型的委托{req.type.value}")
             return ""
 
         self.order_ref += 1
 
-        tp = ORDERTYPE_VT2CTP[req.type]
-        price_type, time_condition, volume_condition = tp
+        price_type, time_condition, volume_condition = ORDERTYPE_VT2CTP[req.exchange][req.type]
 
         ctp_req: dict = {
             "InstrumentID": req.symbol,
