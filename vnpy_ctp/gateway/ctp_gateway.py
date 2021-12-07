@@ -2,7 +2,7 @@ import sys
 import pytz
 from datetime import datetime
 from time import sleep
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
 from pathlib import Path
 
 from vnpy.event import EventEngine
@@ -220,13 +220,7 @@ class CtpGateway(BaseGateway):
 
     def send_order(self, req: OrderRequest) -> str:
         """委托下单"""
-        # 期权询价
-        if req.type == OrderType.RFQ:
-            vt_orderid: str = self.td_api.send_rfq(req)
-        # 其他委托
-        else:
-            vt_orderid: str = self.td_api.send_order(req)
-        return vt_orderid
+        return self.td_api.send_order(req)
 
     def cancel_order(self, req: CancelRequest) -> None:
         """委托撤单"""
@@ -286,7 +280,7 @@ class CtpMdApi(MdApi):
 
         self.connect_status: bool = False
         self.login_status: bool = False
-        self.subscribed: List[str] = set()
+        self.subscribed: Set = set()
 
         self.userid: str = ""
         self.password: str = ""
@@ -332,14 +326,21 @@ class CtpMdApi(MdApi):
         if not data["UpdateTime"]:
             return
 
+        # 过滤还没有收到合约数据前的行情推送
         symbol: str = data["InstrumentID"]
         contract: ContractData = symbol_contract_map.get(symbol, None)
         if not contract:
             return
 
-        timestamp: str = f"{self.current_date} {data['UpdateTime']}.{int(data['UpdateMillisec']/100)}"
+        # 对大商所的交易日字段取本地日期
+        if contract.exchange == Exchange.DCE:
+            date_str: str = self.current_date
+        else:
+            date_str: str = data["ActionDay"]
+
+        timestamp: str = f"{date_str} {data['UpdateTime']}.{int(data['UpdateMillisec']/100)}"
         dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S.%f")
-        dt = CHINA_TZ.localize(dt)
+        dt: datetime = CHINA_TZ.localize(dt)
 
         tick: TickData = TickData(
             symbol=symbol,
@@ -347,6 +348,7 @@ class CtpMdApi(MdApi):
             datetime=dt,
             name=contract.name,
             volume=data["Volume"],
+            turnover=data["Turnover"],
             open_interest=data["OpenInterest"],
             last_price=adjust_price(data["LastPrice"]),
             limit_up=data["UpperLimitPrice"],
@@ -445,6 +447,7 @@ class CtpTdApi(TdApi):
         self.login_status: bool = False
         self.auth_status: bool = False
         self.login_failed: bool = False
+        self.auth_failed: bool = False
         self.contract_inited: bool = False
 
         self.userid: str = ""
@@ -455,7 +458,6 @@ class CtpTdApi(TdApi):
 
         self.frontid: int = 0
         self.sessionid: int = 0
-
         self.order_data: List[dict] = []
         self.trade_data: List[dict] = []
         self.positions: Dict[str, PositionData] = {}
@@ -482,6 +484,8 @@ class CtpTdApi(TdApi):
             self.gateway.write_log("交易服务器授权验证成功")
             self.login()
         else:
+            self.auth_failed = True
+
             self.gateway.write_error("交易服务器授权验证失败", error)
 
     def onRspUserLogin(self, data: dict, error: dict, reqid: int, last: bool) -> None:
@@ -559,7 +563,7 @@ class CtpTdApi(TdApi):
             key: str = f"{data['InstrumentID'], data['PosiDirection']}"
             position: PositionData = self.positions.get(key, None)
             if not position:
-                position = PositionData(
+                position: PositionData = PositionData(
                     symbol=data["InstrumentID"],
                     exchange=contract.exchange,
                     direction=DIRECTION_CTP2VT[data["PosiDirection"]],
@@ -643,6 +647,7 @@ class CtpTdApi(TdApi):
                 contract.option_type = OPTIONTYPE_CTP2VT.get(data["OptionsType"], None)
                 contract.option_strike = data["StrikePrice"]
                 contract.option_index = str(data["StrikePrice"])
+                contract.option_listed = datetime.strptime(data["OpenDate"], "%Y%m%d")
                 contract.option_expiry = datetime.strptime(data["ExpireDate"], "%Y%m%d")
 
             self.gateway.on_contract(contract)
@@ -677,7 +682,7 @@ class CtpTdApi(TdApi):
 
         timestamp: str = f"{data['InsertDate']} {data['InsertTime']}"
         dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
-        dt = CHINA_TZ.localize(dt)
+        dt: datetime = CHINA_TZ.localize(dt)
 
         tp = (data["OrderPriceType"], data["TimeCondition"], data["VolumeCondition"])
 
@@ -712,7 +717,7 @@ class CtpTdApi(TdApi):
 
         timestamp: str = f"{data['TradeDate']} {data['TradeTime']}"
         dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
-        dt = CHINA_TZ.localize(dt)
+        dt: datetime = CHINA_TZ.localize(dt)
 
         trade: TradeData = TradeData(
             symbol=symbol,
@@ -769,6 +774,9 @@ class CtpTdApi(TdApi):
 
     def authenticate(self) -> None:
         """发起授权验证"""
+        if self.auth_failed:
+            return
+
         ctp_req: dict = {
             "UserID": self.userid,
             "BrokerID": self.brokerid,
@@ -855,26 +863,6 @@ class CtpTdApi(TdApi):
 
         self.reqid += 1
         self.reqOrderAction(ctp_req, self.reqid)
-
-    def send_rfq(self, req: OrderRequest) -> str:
-        """询价请求"""
-        self.order_ref += 1
-
-        ctp_req: dict = {
-            "InstrumentID": req.symbol,
-            "ExchangeID": req.exchange.value,
-            "ForQuoteRef": str(self.order_ref),
-            "BrokerID": self.brokerid,
-            "InvestorID": self.userid
-        }
-
-        self.reqid += 1
-        self.reqForQuoteInsert(ctp_req, self.reqid)
-
-        orderid: str = f"{self.frontid}_{self.sessionid}_{self.order_ref}"
-        vt_orderid: str = f"{self.gateway_name}.{orderid}"
-
-        return vt_orderid
 
     def query_account(self) -> None:
         """查询资金"""
