@@ -141,6 +141,8 @@ class CtpGateway(BaseGateway):
     vn.py用于对接期货CTP柜台的交易接口。
     """
 
+    default_name: str = "CTP"
+
     default_setting: Dict[str, str] = {
         "用户名": "",
         "密码": "",
@@ -153,7 +155,7 @@ class CtpGateway(BaseGateway):
 
     exchanges: List[str] = list(EXCHANGE_CTP2VT.values())
 
-    def __init__(self, event_engine: EventEngine, gateway_name: str = "CTP") -> None:
+    def __init__(self, event_engine: EventEngine, gateway_name: str) -> None:
         """构造函数"""
         super().__init__(event_engine, gateway_name)
 
@@ -173,12 +175,14 @@ class CtpGateway(BaseGateway):
         if (
             (not td_address.startswith("tcp://"))
             and (not td_address.startswith("ssl://"))
+            and (not td_address.startswith("socks"))
         ):
             td_address = "tcp://" + td_address
 
         if (
             (not md_address.startswith("tcp://"))
             and (not md_address.startswith("ssl://"))
+            and (not md_address.startswith("socks"))
         ):
             md_address = "tcp://" + md_address
 
@@ -306,7 +310,7 @@ class CtpMdApi(MdApi):
             return
 
         # 对大商所的交易日字段取本地日期
-        if contract.exchange == Exchange.DCE:
+        if not data["ActionDay"] or contract.exchange == Exchange.DCE:
             date_str: str = self.current_date
         else:
             date_str: str = data["ActionDay"]
