@@ -2,7 +2,7 @@ import sys
 import pytz
 from datetime import datetime
 from time import sleep
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Tuple
 from pathlib import Path
 
 from vnpy.event import EventEngine
@@ -33,13 +33,11 @@ from vnpy.trader.event import EVENT_TIMER
 from ..api import (
     MdApi,
     TdApi,
-    THOST_FTDC_OAS_Submitted,
-    THOST_FTDC_OAS_Accepted,
-    THOST_FTDC_OAS_Rejected,
     THOST_FTDC_OST_NoTradeQueueing,
     THOST_FTDC_OST_PartTradedQueueing,
     THOST_FTDC_OST_AllTraded,
     THOST_FTDC_OST_Canceled,
+    THOST_FTDC_OST_Unknown,
     THOST_FTDC_D_Buy,
     THOST_FTDC_D_Sell,
     THOST_FTDC_PD_Long,
@@ -69,13 +67,11 @@ from ..api import (
 
 # 委托状态映射
 STATUS_CTP2VT: Dict[str, Status] = {
-    THOST_FTDC_OAS_Submitted: Status.SUBMITTING,
-    THOST_FTDC_OAS_Accepted: Status.SUBMITTING,
-    THOST_FTDC_OAS_Rejected: Status.REJECTED,
     THOST_FTDC_OST_NoTradeQueueing: Status.NOTTRADED,
     THOST_FTDC_OST_PartTradedQueueing: Status.PARTTRADED,
     THOST_FTDC_OST_AllTraded: Status.ALLTRADED,
-    THOST_FTDC_OST_Canceled: Status.CANCELLED
+    THOST_FTDC_OST_Canceled: Status.CANCELLED,
+    THOST_FTDC_OST_Unknown: Status.SUBMITTING
 }
 
 # 多空方向映射
@@ -88,7 +84,7 @@ DIRECTION_CTP2VT[THOST_FTDC_PD_Long] = Direction.LONG
 DIRECTION_CTP2VT[THOST_FTDC_PD_Short] = Direction.SHORT
 
 # 委托类型映射
-ORDERTYPE_VT2CTP: Dict[OrderType, Tuple] = {
+ORDERTYPE_VT2CTP: Dict[OrderType, tuple] = {
     OrderType.LIMIT: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
     OrderType.MARKET: (THOST_FTDC_OPT_AnyPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
     OrderType.FAK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_AV),
@@ -138,7 +134,7 @@ symbol_contract_map: Dict[str, ContractData] = {}
 
 class CtpGateway(BaseGateway):
     """
-    vn.py用于对接期货CTP柜台的交易接口。
+    VeighNa用于对接期货CTP柜台的交易接口。
     """
 
     default_name: str = "CTP"
@@ -220,7 +216,7 @@ class CtpGateway(BaseGateway):
         """输出错误信息日志"""
         error_id: int = error["ErrorID"]
         error_msg: str = error["ErrorMsg"]
-        msg = f"{msg}，代码：{error_id}，信息：{error_msg}"
+        msg: str = f"{msg}，代码：{error_id}，信息：{error_msg}"
         self.write_log(msg)
 
     def process_timer_event(self, event) -> None:
@@ -257,7 +253,7 @@ class CtpMdApi(MdApi):
 
         self.connect_status: bool = False
         self.login_status: bool = False
-        self.subscribed: Set = set()
+        self.subscribed: set = set()
 
         self.userid: str = ""
         self.password: str = ""
@@ -364,7 +360,7 @@ class CtpMdApi(MdApi):
 
         self.gateway.on_tick(tick)
 
-    def connect(self, address: str, userid: str, password: str, brokerid: int) -> None:
+    def connect(self, address: str, userid: str, password: str, brokerid: str) -> None:
         """连接服务器"""
         self.userid = userid
         self.password = password
@@ -462,7 +458,6 @@ class CtpTdApi(TdApi):
             self.login()
         else:
             self.auth_failed = True
-
             self.gateway.write_error("交易服务器授权验证失败", error)
 
     def onRspUserLogin(self, data: dict, error: dict, reqid: int, last: bool) -> None:
@@ -540,7 +535,7 @@ class CtpTdApi(TdApi):
             key: str = f"{data['InstrumentID'], data['PosiDirection']}"
             position: PositionData = self.positions.get(key, None)
             if not position:
-                position: PositionData = PositionData(
+                position = PositionData(
                     symbol=data["InstrumentID"],
                     exchange=contract.exchange,
                     direction=DIRECTION_CTP2VT[data["PosiDirection"]],
@@ -549,7 +544,7 @@ class CtpTdApi(TdApi):
                 self.positions[key] = position
 
             # 对于上期所昨仓需要特殊处理
-            if position.exchange in [Exchange.SHFE, Exchange.INE]:
+            if position.exchange in {Exchange.SHFE, Exchange.INE}:
                 if data["YdPosition"] and not data["TodayPosition"]:
                     position.yd_volume = data["Position"]
             # 对于其他交易所昨仓的计算
@@ -661,7 +656,7 @@ class CtpTdApi(TdApi):
         dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
         dt: datetime = CHINA_TZ.localize(dt)
 
-        tp = (data["OrderPriceType"], data["TimeCondition"], data["VolumeCondition"])
+        tp: tuple = (data["OrderPriceType"], data["TimeCondition"], data["VolumeCondition"])
 
         order: OrderData = OrderData(
             symbol=symbol,
@@ -710,21 +705,12 @@ class CtpTdApi(TdApi):
         )
         self.gateway.on_trade(trade)
 
-    def onRspForQuoteInsert(self, data: dict, error: dict, reqid: int, last: bool) -> None:
-        """询价请求回报"""
-        if not error["ErrorID"]:
-            symbol: str = data["InstrumentID"]
-            msg: str = f"{symbol}询价请求发送成功"
-            self.gateway.write_log(msg)
-        else:
-            self.gateway.write_error("询价请求发送失败", error)
-
     def connect(
         self,
         address: str,
         userid: str,
         password: str,
-        brokerid: int,
+        brokerid: str,
         auth_code: str,
         appid: str
     ) -> None:
@@ -791,7 +777,7 @@ class CtpTdApi(TdApi):
 
         self.order_ref += 1
 
-        tp = ORDERTYPE_VT2CTP[req.type]
+        tp: tuple = ORDERTYPE_VT2CTP[req.type]
         price_type, time_condition, volume_condition = tp
 
         ctp_req: dict = {
@@ -816,7 +802,10 @@ class CtpTdApi(TdApi):
         }
 
         self.reqid += 1
-        self.reqOrderInsert(ctp_req, self.reqid)
+        n: int = self.reqOrderInsert(ctp_req, self.reqid)
+        if n:
+            self.gateway.write_log(f"委托请求发送失败，错误代码：{n}")
+            return ""
 
         orderid: str = f"{self.frontid}_{self.sessionid}_{self.order_ref}"
         order: OrderData = req.create_order_data(orderid, self.gateway_name)
