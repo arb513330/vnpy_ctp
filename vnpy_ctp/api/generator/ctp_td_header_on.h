@@ -78,6 +78,8 @@ virtual void onRspQryInstrument(const dict &data, const dict &error, int reqid, 
 
 virtual void onRspQryDepthMarketData(const dict &data, const dict &error, int reqid, bool last) {};
 
+virtual void onRspQryTraderOffer(const dict &data, const dict &error, int reqid, bool last) {};
+
 virtual void onRspQrySettlementInfo(const dict &data, const dict &error, int reqid, bool last) {};
 
 virtual void onRspQryTransferBank(const dict &data, const dict &error, int reqid, bool last) {};
@@ -251,4 +253,24 @@ virtual void onRtnChangeAccountByBank(const dict &data) {};
 virtual void onRspQryClassifiedInstrument(const dict &data, const dict &error, int reqid, bool last) {};
 
 virtual void onRspQryCombPromotionParam(const dict &data, const dict &error, int reqid, bool last) {};
+
+virtual void onRspQryRiskSettleInvstPosition(const dict &data, const dict &error, int reqid, bool last) {};
+
+virtual void onRspQryRiskSettleProductStatus(const dict &data, const dict &error, int reqid, bool last) {};
+
+virtual void onRspQrySPBMFutureParameter(const dict &data, const dict &error, int reqid, bool last) {};
+
+virtual void onRspQrySPBMOptionParameter(const dict &data, const dict &error, int reqid, bool last) {};
+
+virtual void onRspQrySPBMIntraParameter(const dict &data, const dict &error, int reqid, bool last) {};
+
+virtual void onRspQrySPBMInterParameter(const dict &data, const dict &error, int reqid, bool last) {};
+
+virtual void onRspQrySPBMPortfDefinition(const dict &data, const dict &error, int reqid, bool last) {};
+
+virtual void onRspQrySPBMInvestorPortfDef(const dict &data, const dict &error, int reqid, bool last) {};
+
+virtual void onRspQryInvestorPortfMarginRatio(const dict &data, const dict &error, int reqid, bool last) {};
+
+virtual void onRspQryInvestorProdSPBMDetail(const dict &data, const dict &error, int reqid, bool last) {};
 

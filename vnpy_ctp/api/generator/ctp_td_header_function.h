@@ -78,6 +78,8 @@ int reqQryInstrument(const dict &req, int reqid);
 
 int reqQryDepthMarketData(const dict &req, int reqid);
 
+int reqQryTraderOffer(const dict &req, int reqid);
+
 int reqQrySettlementInfo(const dict &req, int reqid);
 
 int reqQryTransferBank(const dict &req, int reqid);
@@ -165,4 +167,24 @@ int reqQueryBankAccountMoneyByFuture(const dict &req, int reqid);
 int reqQryClassifiedInstrument(const dict &req, int reqid);
 
 int reqQryCombPromotionParam(const dict &req, int reqid);
+
+int reqQryRiskSettleInvstPosition(const dict &req, int reqid);
+
+int reqQryRiskSettleProductStatus(const dict &req, int reqid);
+
+int reqQrySPBMFutureParameter(const dict &req, int reqid);
+
+int reqQrySPBMOptionParameter(const dict &req, int reqid);
+
+int reqQrySPBMIntraParameter(const dict &req, int reqid);
+
+int reqQrySPBMInterParameter(const dict &req, int reqid);
+
+int reqQrySPBMPortfDefinition(const dict &req, int reqid);
+
+int reqQrySPBMInvestorPortfDef(const dict &req, int reqid);
+
+int reqQryInvestorPortfMarginRatio(const dict &req, int reqid);
+
+int reqQryInvestorProdSPBMDetail(const dict &req, int reqid);
 

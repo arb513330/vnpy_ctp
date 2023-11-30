@@ -1,5 +1,4 @@
 import sys
-import pytz
 from datetime import datetime
 from time import sleep
 from typing import Dict, List, Tuple
@@ -27,7 +26,7 @@ from vnpy.trader.object import (
     CancelRequest,
     SubscribeRequest,
 )
-from vnpy.trader.utility import get_folder_path
+from vnpy.trader.utility import get_folder_path, ZoneInfo
 from vnpy.trader.event import EVENT_TIMER
 
 from ..api import (
@@ -107,7 +106,8 @@ EXCHANGE_CTP2VT: Dict[str, Exchange] = {
     "SHFE": Exchange.SHFE,
     "CZCE": Exchange.CZCE,
     "DCE": Exchange.DCE,
-    "INE": Exchange.INE
+    "INE": Exchange.INE,
+    "GFEX": Exchange.GFEX
 }
 
 # 产品类型映射
@@ -126,7 +126,7 @@ OPTIONTYPE_CTP2VT: Dict[str, OptionType] = {
 
 # 其他常量
 MAX_FLOAT = sys.float_info.max                  # 浮点数极限值
-CHINA_TZ = pytz.timezone("Asia/Shanghai")       # 中国时区
+CHINA_TZ = ZoneInfo("Asia/Shanghai")       # 中国时区
 
 # 合约数据全局缓存字典
 symbol_contract_map: Dict[str, ContractData] = {}
@@ -311,9 +311,9 @@ class CtpMdApi(MdApi):
         else:
             date_str: str = data["ActionDay"]
 
-        timestamp: str = f"{date_str} {data['UpdateTime']}.{int(data['UpdateMillisec']/100)}"
+        timestamp: str = f"{date_str} {data['UpdateTime']}.{data['UpdateMillisec']}"
         dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S.%f")
-        dt: datetime = CHINA_TZ.localize(dt)
+        dt: datetime = dt.replace(tzinfo=CHINA_TZ)
 
         tick: TickData = TickData(
             symbol=symbol,
@@ -457,7 +457,10 @@ class CtpTdApi(TdApi):
             self.gateway.write_log("交易服务器授权验证成功")
             self.login()
         else:
-            self.auth_failed = True
+            # 如果是授权码错误，则禁止再次发起认证
+            if error['ErrorID'] == 63:
+                self.auth_failed = True
+
             self.gateway.write_error("交易服务器授权验证失败", error)
 
     def onRspUserLogin(self, data: dict, error: dict, reqid: int, last: bool) -> None:
@@ -652,23 +655,32 @@ class CtpTdApi(TdApi):
         order_ref: str = data["OrderRef"]
         orderid: str = f"{frontid}_{sessionid}_{order_ref}"
 
+        status: Status = STATUS_CTP2VT.get(data["OrderStatus"], None)
+        if not status:
+            self.gateway.write_log(f"收到不支持的委托状态，委托号：{orderid}")
+            return
+
         timestamp: str = f"{data['InsertDate']} {data['InsertTime']}"
         dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
-        dt: datetime = CHINA_TZ.localize(dt)
+        dt: datetime = dt.replace(tzinfo=CHINA_TZ)
 
         tp: tuple = (data["OrderPriceType"], data["TimeCondition"], data["VolumeCondition"])
+        order_type: OrderType = ORDERTYPE_CTP2VT.get(tp, None)
+        if not order_type:
+            self.gateway.write_log(f"收到不支持的委托类型，委托号：{orderid}")
+            return
 
         order: OrderData = OrderData(
             symbol=symbol,
             exchange=contract.exchange,
             orderid=orderid,
-            type=ORDERTYPE_CTP2VT[tp],
+            type=order_type,
             direction=DIRECTION_CTP2VT[data["Direction"]],
             offset=OFFSET_CTP2VT[data["CombOffsetFlag"]],
             price=data["LimitPrice"],
             volume=data["VolumeTotalOriginal"],
             traded=data["VolumeTraded"],
-            status=STATUS_CTP2VT[data["OrderStatus"]],
+            status=status,
             datetime=dt,
             gateway_name=self.gateway_name
         )
@@ -689,7 +701,7 @@ class CtpTdApi(TdApi):
 
         timestamp: str = f"{data['TradeDate']} {data['TradeTime']}"
         dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S")
-        dt: datetime = CHINA_TZ.localize(dt)
+        dt: datetime = dt.replace(tzinfo=CHINA_TZ)
 
         trade: TradeData = TradeData(
             symbol=symbol,
@@ -758,8 +770,7 @@ class CtpTdApi(TdApi):
         ctp_req: dict = {
             "UserID": self.userid,
             "Password": self.password,
-            "BrokerID": self.brokerid,
-            "AppID": self.appid
+            "BrokerID": self.brokerid
         }
 
         self.reqid += 1
