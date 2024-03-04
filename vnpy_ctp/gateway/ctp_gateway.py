@@ -157,7 +157,7 @@ OPTIONTYPE_CTP2VT: dict[str, OptionType] = {
 }
 
 # 其他常量
-MAX_FLOAT = sys.float_info.max                  # 浮点数极限值
+MAX_FLOAT = sys.float_info.max             # 浮点数极限值
 CHINA_TZ = ZoneInfo("Asia/Shanghai")       # 中国时区
 
 # 合约数据全局缓存字典
@@ -291,6 +291,8 @@ class CtpMdApi(MdApi):
         self.password: str = ""
         self.brokerid: str = ""
 
+        self.accu_volumes: Dict[str, float] = {}
+
         self.current_date: str = datetime.now().strftime("%Y%m%d")
 
     def onFrontConnected(self) -> None:
@@ -388,6 +390,9 @@ class CtpMdApi(MdApi):
             tick.ask_volume_3 = data["AskVolume3"]
             tick.ask_volume_4 = data["AskVolume4"]
             tick.ask_volume_5 = data["AskVolume5"]
+
+        tick.last_volume = max(0.0, tick.volume - self.accu_volumes.get(tick.vt_symbol, 0))
+        self.accu_volumes[tick.vt_symbol] = tick.volume
 
         self.gateway.on_tick(tick)
 
@@ -586,7 +591,7 @@ class CtpTdApi(TdApi):
                 position.yd_volume = data["Position"] - data["TodayPosition"]
 
             # 获取合约的乘数信息
-            size: int = contract.size
+            size: float = contract.size
 
             # 计算之前已有仓位的持仓总成本
             cost: float = position.price * position.volume * size
