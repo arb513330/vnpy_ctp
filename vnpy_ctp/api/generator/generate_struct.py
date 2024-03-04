@@ -1,4 +1,5 @@
 """"""
+
 import importlib
 
 
@@ -75,7 +76,7 @@ class StructGenerator:
         py_type = self.typedefs[words[0]]
         name = words[1]
 
-        new_line = f"    \"{name}\": \"{py_type}\",\n"
+        new_line = f'    "{name}": "{py_type}",\n'
         self.f_struct.write(new_line)
 
 

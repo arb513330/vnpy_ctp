@@ -63,7 +63,7 @@ from ..api import (
     THOST_FTDC_VC_AV,
     THOST_FTDC_TC_IOC,
     THOST_FTDC_VC_CV,
-    THOST_FTDC_AF_Delete
+    THOST_FTDC_AF_Delete,
 )
 
 
@@ -76,15 +76,12 @@ STATUS_CTP2VT: dict[str, Status] = {
     THOST_FTDC_OST_PartTradedQueueing: Status.PARTTRADED,
     THOST_FTDC_OST_AllTraded: Status.ALLTRADED,
     THOST_FTDC_OST_Canceled: Status.CANCELLED,
-    THOST_FTDC_OST_Unknown: Status.SUBMITTING
+    THOST_FTDC_OST_Unknown: Status.SUBMITTING,
 }
 
 # 多空方向映射
-DIRECTION_VT2CTP: dict[Direction, str] = {
-    Direction.LONG: THOST_FTDC_D_Buy,
-    Direction.SHORT: THOST_FTDC_D_Sell
-}
-DIRECTION_CTP2VT: dict[str, Direction] = {v: k for k, v in DIRECTION_VT2CTP.items()}
+DIRECTION_VT2CTP: Dict[Direction, str] = {Direction.LONG: THOST_FTDC_D_Buy, Direction.SHORT: THOST_FTDC_D_Sell}
+DIRECTION_CTP2VT: Dict[str, Direction] = {v: k for k, v in DIRECTION_VT2CTP.items()}
 DIRECTION_CTP2VT[THOST_FTDC_PD_Long] = Direction.LONG
 DIRECTION_CTP2VT[THOST_FTDC_PD_Short] = Direction.SHORT
 
@@ -139,7 +136,7 @@ EXCHANGE_CTP2VT: dict[str, Exchange] = {
     "CZCE": Exchange.CZCE,
     "DCE": Exchange.DCE,
     "INE": Exchange.INE,
-    "GFEX": Exchange.GFEX
+    "GFEX": Exchange.GFEX,
 }
 
 # 产品类型映射
@@ -147,18 +144,18 @@ PRODUCT_CTP2VT: dict[str, Product] = {
     THOST_FTDC_PC_Futures: Product.FUTURES,
     THOST_FTDC_PC_Options: Product.OPTION,
     THOST_FTDC_PC_SpotOption: Product.OPTION,
-    THOST_FTDC_PC_Combination: Product.SPREAD
+    THOST_FTDC_PC_Combination: Product.SPREAD,
 }
 
 # 期权类型映射
 OPTIONTYPE_CTP2VT: dict[str, OptionType] = {
     THOST_FTDC_CP_CallOptions: OptionType.CALL,
-    THOST_FTDC_CP_PutOptions: OptionType.PUT
+    THOST_FTDC_CP_PutOptions: OptionType.PUT,
 }
 
 # 其他常量
-MAX_FLOAT = sys.float_info.max             # 浮点数极限值
-CHINA_TZ = ZoneInfo("Asia/Shanghai")       # 中国时区
+MAX_FLOAT = sys.float_info.max  # 浮点数极限值
+CHINA_TZ = ZoneInfo("Asia/Shanghai")  # 中国时区
 
 # 合约数据全局缓存字典
 symbol_contract_map: dict[str, ContractData] = {}
@@ -178,7 +175,7 @@ class CtpGateway(BaseGateway):
         "交易服务器": "",
         "行情服务器": "",
         "产品名称": "",
-        "授权编码": ""
+        "授权编码": "",
     }
 
     exchanges: list[str] = list(EXCHANGE_CTP2VT.values())
@@ -367,7 +364,7 @@ class CtpMdApi(MdApi):
             ask_price_1=adjust_price(data["AskPrice1"]),
             bid_volume_1=data["BidVolume1"],
             ask_volume_1=data["AskVolume1"],
-            gateway_name=self.gateway_name
+            gateway_name=self.gateway_name,
         )
 
         if data["BidVolume2"] or data["AskVolume2"]:
@@ -414,11 +411,7 @@ class CtpMdApi(MdApi):
 
     def login(self) -> None:
         """用户登录"""
-        ctp_req: dict = {
-            "UserID": self.userid,
-            "Password": self.password,
-            "BrokerID": self.brokerid
-        }
+        ctp_req: dict = {"UserID": self.userid, "Password": self.password, "BrokerID": self.brokerid}
 
         self.reqid += 1
         self.reqUserLogin(ctp_req, self.reqid)
@@ -488,13 +481,13 @@ class CtpTdApi(TdApi):
 
     def onRspAuthenticate(self, data: dict, error: dict, reqid: int, last: bool) -> None:
         """用户授权验证回报"""
-        if not error['ErrorID']:
+        if not error["ErrorID"]:
             self.auth_status = True
             self.gateway.write_log("交易服务器授权验证成功")
             self.login()
         else:
             # 如果是授权码错误，则禁止再次发起认证
-            if error['ErrorID'] == 63:
+            if error["ErrorID"] == 63:
                 self.auth_failed = True
 
             self.gateway.write_error("交易服务器授权验证失败", error)
@@ -508,10 +501,7 @@ class CtpTdApi(TdApi):
             self.gateway.write_log("交易服务器登录成功")
 
             # 自动确认结算单
-            ctp_req: dict = {
-                "BrokerID": self.brokerid,
-                "InvestorID": self.userid
-            }
+            ctp_req: dict = {"BrokerID": self.brokerid, "InvestorID": self.userid}
             self.reqid += 1
             self.reqSettlementInfoConfirm(ctp_req, self.reqid)
         else:
@@ -536,7 +526,7 @@ class CtpTdApi(TdApi):
             price=data["LimitPrice"],
             volume=data["VolumeTotalOriginal"],
             status=Status.REJECTED,
-            gateway_name=self.gateway_name
+            gateway_name=self.gateway_name,
         )
         self.gateway.on_order(order)
 
@@ -578,7 +568,7 @@ class CtpTdApi(TdApi):
                     symbol=data["InstrumentID"],
                     exchange=contract.exchange,
                     direction=DIRECTION_CTP2VT[data["PosiDirection"]],
-                    gateway_name=self.gateway_name
+                    gateway_name=self.gateway_name,
                 )
                 self.positions[key] = position
 
@@ -626,7 +616,7 @@ class CtpTdApi(TdApi):
             accountid=data["AccountID"],
             balance=data["Balance"],
             frozen=data["FrozenMargin"] + data["FrozenCash"] + data["FrozenCommission"],
-            gateway_name=self.gateway_name
+            gateway_name=self.gateway_name,
         )
         account.available = data["Available"]
 
@@ -645,7 +635,7 @@ class CtpTdApi(TdApi):
                 pricetick=data["PriceTick"],
                 min_volume=data["MinLimitOrderVolume"],
                 max_volume=data["MaxLimitOrderVolume"],
-                gateway_name=self.gateway_name
+                gateway_name=self.gateway_name,
             )
 
             # 期权相关
@@ -719,7 +709,7 @@ class CtpTdApi(TdApi):
             traded=data["VolumeTraded"],
             status=status,
             datetime=dt,
-            gateway_name=self.gateway_name
+            gateway_name=self.gateway_name,
         )
         self.gateway.on_order(order)
 
@@ -738,7 +728,6 @@ class CtpTdApi(TdApi):
 
         timestamp: str = f"{data['TradeDate']} {data['TradeTime']}"
         dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S").replace(tzinfo=CHINA_TZ)
-        dt: datetime = dt
 
         trade: TradeData = TradeData(
             symbol=symbol,
@@ -750,7 +739,7 @@ class CtpTdApi(TdApi):
             price=data["Price"],
             volume=data["Volume"],
             datetime=dt,
-            gateway_name=self.gateway_name
+            gateway_name=self.gateway_name,
         )
         self.gateway.on_trade(trade)
 
@@ -793,7 +782,7 @@ class CtpTdApi(TdApi):
             "UserID": self.userid,
             "BrokerID": self.brokerid,
             "AuthCode": self.auth_code,
-            "AppID": self.appid
+            "AppID": self.appid,
         }
 
         self.reqid += 1
@@ -804,11 +793,7 @@ class CtpTdApi(TdApi):
         if self.login_failed:
             return
 
-        ctp_req: dict = {
-            "UserID": self.userid,
-            "Password": self.password,
-            "BrokerID": self.brokerid
-        }
+        ctp_req: dict = {"UserID": self.userid, "Password": self.password, "BrokerID": self.brokerid}
 
         self.reqid += 1
         self.reqUserLogin(ctp_req, self.reqid)
@@ -845,7 +830,7 @@ class CtpTdApi(TdApi):
             "IsAutoSuspend": 0,
             "TimeCondition": time_condition,
             "VolumeCondition": volume_condition,
-            "MinVolume": 1
+            "MinVolume": 1,
         }
 
         self.reqid += 1
@@ -872,7 +857,7 @@ class CtpTdApi(TdApi):
             "SessionID": int(sessionid),
             "ActionFlag": THOST_FTDC_AF_Delete,
             "BrokerID": self.brokerid,
-            "InvestorID": self.userid
+            "InvestorID": self.userid,
         }
 
         self.reqid += 1
@@ -888,10 +873,7 @@ class CtpTdApi(TdApi):
         if not symbol_contract_map:
             return
 
-        ctp_req: dict = {
-            "BrokerID": self.brokerid,
-            "InvestorID": self.userid
-        }
+        ctp_req: dict = {"BrokerID": self.brokerid, "InvestorID": self.userid}
 
         self.reqid += 1
         self.reqQryInvestorPosition(ctp_req, self.reqid)
