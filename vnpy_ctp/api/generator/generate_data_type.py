@@ -65,9 +65,9 @@ class DataTypeGenerator:
         if typedef == "char":
             if "[" in name:
                 typedef = "string"
-                name = name[:name.index("[")]
+                name = name[: name.index("[")]
 
-        new_line = f"{name} = \"{typedef}\"\n"
+        new_line = f'{name} = "{typedef}"\n'
         self.f_typedef.write(new_line)
 
 

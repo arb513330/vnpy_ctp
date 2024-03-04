@@ -1,9 +1,10 @@
 """"""
+
 import importlib
 
 
 class ApiGenerator:
-    """API生成器"""""
+    """API生成器""" ""
 
     def __init__(self, filename: str, prefix: str, name: str, class_name: str):
         """Constructor"""
@@ -65,7 +66,7 @@ class ApiGenerator:
 
     def process_callback(self, line: str):
         """处理回掉函数"""
-        name = line[line.index("On"):line.index("(")]
+        name = line[line.index("On") : line.index("(")]
         self.lines[name] = line
 
         d = self.generate_arg_dict(line)
@@ -73,14 +74,14 @@ class ApiGenerator:
 
     def process_function(self, line: str):
         """处理主动函数"""
-        name = line[line.index("Req"):line.index("(")]
+        name = line[line.index("Req") : line.index("(")]
 
         d = self.generate_arg_dict(line)
         self.functions[name] = d
 
     def generate_arg_dict(self, line: str):
         """生成参数字典"""
-        args_str = line[line.index("(") + 1:line.index(")")]
+        args_str = line[line.index("(") + 1 : line.index(")")]
         if not args_str:
             return {}
         args = args_str.split(",")
@@ -150,8 +151,7 @@ class ApiGenerator:
             for name, d in self.callbacks.items():
                 line = self.lines[name]
 
-                f.write(line.replace("virtual void ",
-                                     f"void {self.class_name}::") + "\n")
+                f.write(line.replace("virtual void ", f"void {self.class_name}::") + "\n")
                 f.write("{\n")
                 f.write("\tTask task = Task();\n")
                 f.write(f"\ttask.task_name = {name.upper()};\n")
@@ -199,8 +199,7 @@ class ApiGenerator:
                 process_name = name.replace("On", "process")
                 on_name = name.replace("On", "on")
 
-                f.write(
-                    f"void {self.class_name}::{process_name}(Task *task)\n")
+                f.write(f"void {self.class_name}::{process_name}(Task *task)\n")
                 f.write("{\n")
                 f.write("\tgil_scoped_acquire acquire;\n")
 
@@ -217,17 +216,14 @@ class ApiGenerator:
                         f.write("\tdict error;\n")
                         f.write("\tif (task->task_error)\n")
                         f.write("\t{\n")
-                        f.write(
-                            f"\t\t{type_} *task_error = ({type_}*)task->task_error;\n")
+                        f.write(f"\t\t{type_} *task_error = ({type_}*)task->task_error;\n")
 
                         struct_fields = self.structs[type_]
                         for struct_field, struct_type in struct_fields.items():
                             if struct_type == "string":
-                                f.write(
-                                    f"\t\terror[\"{struct_field}\"] = toUtf(task_error->{struct_field});\n")
+                                f.write(f'\t\terror["{struct_field}"] = toUtf(task_error->{struct_field});\n')
                             else:
-                                f.write(
-                                    f"\t\terror[\"{struct_field}\"] = task_error->{struct_field};\n")
+                                f.write(f'\t\terror["{struct_field}"] = task_error->{struct_field};\n')
 
                         f.write("\t\tdelete task_error;\n")
                         f.write("\t}\n")
@@ -237,17 +233,14 @@ class ApiGenerator:
                         f.write("\tdict data;\n")
                         f.write("\tif (task->task_data)\n")
                         f.write("\t{\n")
-                        f.write(
-                            f"\t\t{type_} *task_data = ({type_}*)task->task_data;\n")
+                        f.write(f"\t\t{type_} *task_data = ({type_}*)task->task_data;\n")
 
                         struct_fields = self.structs[type_]
                         for struct_field, struct_type in struct_fields.items():
                             if struct_type == "string":
-                                f.write(
-                                    f"\t\tdata[\"{struct_field}\"] = toUtf(task_data->{struct_field});\n")
+                                f.write(f'\t\tdata["{struct_field}"] = toUtf(task_data->{struct_field});\n')
                             else:
-                                f.write(
-                                    f"\t\tdata[\"{struct_field}\"] = task_data->{struct_field};\n")
+                                f.write(f'\t\tdata["{struct_field}"] = task_data->{struct_field};\n')
 
                         f.write("\t\tdelete task_data;\n")
                         f.write("\t}\n")
@@ -264,8 +257,7 @@ class ApiGenerator:
                 req_name = name.replace("Req", "req")
                 type_ = list(d.values())[0]
 
-                f.write(
-                    f"int {self.class_name}::{req_name}(const dict &req, int reqid)\n")
+                f.write(f"int {self.class_name}::{req_name}(const dict &req, int reqid)\n")
                 f.write("{\n")
                 f.write(f"\t{type_} myreq = {type_}();\n")
                 f.write("\tmemset(&myreq, 0, sizeof(myreq));\n")
@@ -273,9 +265,9 @@ class ApiGenerator:
                 struct_fields = self.structs[type_]
                 for struct_field, struct_type in struct_fields.items():
                     if struct_type == "string":
-                        line = f"\tgetString(req, \"{struct_field}\", myreq.{struct_field});\n"
+                        line = f'\tgetString(req, "{struct_field}", myreq.{struct_field});\n'
                     else:
-                        line = f"\tget{struct_type.capitalize()}(req, \"{struct_field}\", &myreq.{struct_field});\n"
+                        line = f'\tget{struct_type.capitalize()}(req, "{struct_field}", &myreq.{struct_field});\n'
                     f.write(line)
 
                 f.write(f"\tint i = this->api->{name}(&myreq, reqid);\n")
@@ -326,13 +318,13 @@ class ApiGenerator:
         with open(filename, "w") as f:
             for name in self.functions.keys():
                 name = name.replace("Req", "req")
-                f.write(f".def(\"{name}\", &{self.class_name}::{name})\n")
+                f.write(f'.def("{name}", &{self.class_name}::{name})\n')
 
             f.write("\n")
 
             for name in self.callbacks.keys():
                 name = name.replace("On", "on")
-                f.write(f".def(\"{name}\", &{self.class_name}::{name})\n")
+                f.write(f'.def("{name}", &{self.class_name}::{name})\n')
 
             f.write(";\n")
 
