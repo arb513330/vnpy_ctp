@@ -40,3 +40,5 @@ x64/
 
 
 .DS_Store
+
+vnctp*.pyd
