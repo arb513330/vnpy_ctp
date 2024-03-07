@@ -1,6 +1,7 @@
 import sys
 from datetime import datetime
 from time import sleep
+from typing import Any
 from pathlib import Path
 
 from vnpy.event import EventEngine
@@ -26,6 +27,7 @@ from vnpy.trader.object import (
     SubscribeRequest,
 )
 from vnpy.trader.utility import get_folder_path, ZoneInfo
+from vnpy.trader.ui.utilities import RegisteredQWidgetType
 from vnpy.trader.event import EVENT_TIMER
 
 from ..api import (
@@ -168,14 +170,17 @@ class CtpGateway(BaseGateway):
 
     default_name: str = "CTP"
 
-    default_setting: dict[str, str] = {
-        "用户名": "",
-        "密码": "",
-        "经纪商代码": "",
-        "交易服务器": "",
-        "行情服务器": "",
-        "产品名称": "",
-        "授权编码": "",
+    default_setting: Dict[str, Tuple[str, Any]] = {
+        "行情用户名": ("", RegisteredQWidgetType.GW_EDITBOX),
+        "行情密码": ("", RegisteredQWidgetType.GW_PASSWORDBOX),
+        "行情经纪商代码": ("", RegisteredQWidgetType.GW_EDITBOX),
+        "行情服务器": ("", RegisteredQWidgetType.GW_EDITBOX),
+        "交易用户名": ("", RegisteredQWidgetType.GW_EDITBOX),
+        "交易密码": ("", RegisteredQWidgetType.GW_PASSWORDBOX),
+        "交易经纪商代码": ("", RegisteredQWidgetType.GW_EDITBOX),
+        "交易服务器": ("", RegisteredQWidgetType.GW_EDITBOX),
+        "产品名称": ("", RegisteredQWidgetType.GW_EDITBOX),
+        "授权编码": ("", RegisteredQWidgetType.GW_PASSWORDBOX),
     }
 
     exchanges: list[str] = list(EXCHANGE_CTP2VT.values())
@@ -189,9 +194,12 @@ class CtpGateway(BaseGateway):
 
     def connect(self, setting: dict) -> None:
         """连接交易接口"""
-        userid: str = setting["用户名"]
-        password: str = setting["密码"]
-        brokerid: str = setting["经纪商代码"]
+        m_userid: str = setting["行情用户名"]
+        m_password: str = setting["行情密码"]
+        m_brokerid: str = setting["行情经纪商代码"]
+        t_userid: str = setting["交易用户名"]
+        t_password: str = setting["交易密码"]
+        t_brokerid: str = setting["交易经纪商代码"]
         td_address: str = setting["交易服务器"]
         md_address: str = setting["行情服务器"]
         appid: str = setting["产品名称"]
@@ -211,8 +219,8 @@ class CtpGateway(BaseGateway):
         ):
             md_address = "tcp://" + md_address
 
-        self.td_api.connect(td_address, userid, password, brokerid, auth_code, appid)
-        self.md_api.connect(md_address, userid, password, brokerid)
+        self.td_api.connect(td_address, t_userid, t_password, t_brokerid, auth_code, appid)
+        self.md_api.connect(md_address, m_userid, m_password, m_brokerid)
 
         self.init_query()
 
