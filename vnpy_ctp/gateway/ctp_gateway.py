@@ -57,6 +57,11 @@ from ..api import (
 )
 
 
+from vnpy.trader.utility import setup_plain_logger
+import logging
+logger = setup_plain_logger(__name__, logging.INFO, "vnpy_ctpgw.log", stream=True)
+
+
 # 委托状态映射
 STATUS_CTP2VT: Dict[str, Status] = {
     THOST_FTDC_OST_NoTradeQueueing: Status.NOTTRADED,
@@ -293,6 +298,7 @@ class CtpMdApi(MdApi):
 
     def onRtnDepthMarketData(self, data: dict) -> None:
         """行情数据推送"""
+
         # 过滤没有时间戳的异常行情数据
         if not data["UpdateTime"]:
             return
@@ -308,8 +314,8 @@ class CtpMdApi(MdApi):
             date_str: str = self.current_date
         else:
             date_str: str = data["ActionDay"]
-
         timestamp: str = f"{date_str} {data['UpdateTime']}.{data['UpdateMillisec']}"
+        logger.info(f"onRtnDepthMarketData begin: {symbol} {timestamp}")
         dt: datetime = datetime.strptime(timestamp, "%Y%m%d %H:%M:%S.%f")
         dt: datetime = dt.replace(tzinfo=CHINA_TZ)
 
@@ -358,7 +364,7 @@ class CtpMdApi(MdApi):
 
         tick.last_volume = max(0.0, tick.volume - self.accu_volumes.get(tick.vt_symbol, 0))
         self.accu_volumes[tick.vt_symbol] = tick.volume
-
+        logger.info(f"onRtnDepthMarketData end: {symbol} {timestamp}")
         self.gateway.on_tick(tick)
 
     def connect(self, address: str, userid: str, password: str, brokerid: str) -> None:

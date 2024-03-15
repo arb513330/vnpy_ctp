@@ -7,7 +7,7 @@
 #include "pybind11/pybind11.h"
 #include "ctp/ThostFtdcMdApi.h"
 
-
+using namespace std::chrono;
 using namespace pybind11;
 
 //³£Á¿

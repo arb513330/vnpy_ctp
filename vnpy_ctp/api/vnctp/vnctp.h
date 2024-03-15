@@ -1,6 +1,7 @@
 #include <string>
 #include <queue>
 #include <thread>
+#define _CRT_SECURE_NO_WARNINGS
 #include <mutex>
 #include <iostream>
 #include <codecvt>

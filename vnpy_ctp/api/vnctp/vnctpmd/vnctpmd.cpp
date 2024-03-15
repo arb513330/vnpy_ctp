@@ -2,7 +2,24 @@
 //
 
 #include "vnctpmd.h"
+#include <iostream>
+#include <fstream>
 
+
+void log_current_time(const char* location, std::string& symbol, std::string& update_time_second, int microsecond) {
+	static std::fstream myfout("E:\\vnlog\\ctp_cpp.log", std::ios::app);
+
+	auto timepoint = system_clock::now();
+	auto coarse = system_clock::to_time_t(timepoint);
+	auto fine = time_point_cast<std::chrono::milliseconds>(timepoint);
+
+	char buffer[sizeof "9999-12-31 23:59:59.999"];
+	std::snprintf(buffer + std::strftime(buffer, sizeof buffer - 3,
+		"%F %T.", std::localtime(&coarse)),
+		4, "%03lu", fine.time_since_epoch().count() % 1000);
+
+	myfout << location << ' ' << symbol << ' ' << buffer << ' ' << update_time_second << '.' << microsecond << std::endl;
+}
 
 ///-------------------------------------------------------------------------------------
 ///C++的回调函数将数据保存到队列中
@@ -50,7 +67,7 @@ void MdApi::OnRspUserLogin(CThostFtdcRspUserLoginField *pRspUserLogin, CThostFtd
 	task.task_id = nRequestID;
 	task.task_last = bIsLast;
 	this->task_queue.push(task);
-};
+}
 
 void MdApi::OnRspUserLogout(CThostFtdcUserLogoutField *pUserLogout, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
@@ -195,6 +212,7 @@ void MdApi::OnRspUnSubForQuoteRsp(CThostFtdcSpecificInstrumentField *pSpecificIn
 
 void MdApi::OnRtnDepthMarketData(CThostFtdcDepthMarketDataField *pDepthMarketData)
 {
+	log_current_time("OnRtnDepthMarketData C++", toUtf(pDepthMarketData->InstrumentID), toUtf(pDepthMarketData->UpdateTime), pDepthMarketData->UpdateMillisec);
 	Task task = Task();
 	task.task_name = ONRTNDEPTHMARKETDATA;
 	if (pDepthMarketData)
@@ -524,11 +542,14 @@ void MdApi::processRspUnSubForQuoteRsp(Task *task)
 
 void MdApi::processRtnDepthMarketData(Task *task)
 {
-	gil_scoped_acquire acquire;
-	dict data;
+	
 	if (task->task_data)
 	{
-		CThostFtdcDepthMarketDataField *task_data = (CThostFtdcDepthMarketDataField*)task->task_data;
+		gil_scoped_acquire acquire;
+		dict data;
+		CThostFtdcDepthMarketDataField* task_data = (CThostFtdcDepthMarketDataField*)task->task_data;
+		log_current_time("processRtnDepthMarketData begin", toUtf(task_data->InstrumentID), toUtf(task_data->UpdateTime), task_data->UpdateMillisec);
+		
 		data["TradingDay"] = toUtf(task_data->TradingDay);
 		data["reserve1"] = toUtf(task_data->reserve1);
 		data["ExchangeID"] = toUtf(task_data->ExchangeID);
@@ -578,8 +599,9 @@ void MdApi::processRtnDepthMarketData(Task *task)
 		data["BandingUpperPrice"] = task_data->BandingUpperPrice;
 		data["BandingLowerPrice"] = task_data->BandingLowerPrice;
 		delete task_data;
+		log_current_time("processRtnDepthMarketData", toUtf(task_data->InstrumentID), toUtf(task_data->UpdateTime), task_data->UpdateMillisec);
+		this->onRtnDepthMarketData(data);
 	}
-	this->onRtnDepthMarketData(data);
 };
 
 void MdApi::processRtnForQuoteRsp(Task *task)
