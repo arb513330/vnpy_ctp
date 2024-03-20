@@ -17,6 +17,8 @@ from vnpy.trader.object import (
     OrderRequest,
     CancelRequest,
     SubscribeRequest,
+    MarginRate,
+Commission,
 )
 from vnpy.trader.utility import get_folder_path, ZoneInfo
 from vnpy.trader.ui.utilities import RegisteredQWidgetType
@@ -186,6 +188,8 @@ class CtpGateway(BaseGateway):
     def subscribe(self, req: SubscribeRequest) -> None:
         """订阅行情"""
         self.md_api.subscribe(req)
+        self.td_api.query_margin(req)
+        self.td_api.query_commission(req)
 
     def send_order(self, req: OrderRequest) -> str:
         """委托下单"""
@@ -203,6 +207,12 @@ class CtpGateway(BaseGateway):
         """查询持仓"""
         self.td_api.query_position()
 
+    def query_margin(self, req: SubscribeRequest) -> None:
+        self.td_api.query_margin(req)
+
+    def query_commission(self, req: SubscribeRequest) -> None:
+        self.td_api.query_commission(req)
+
     def close(self) -> None:
         """关闭接口"""
         self.td_api.close()
@@ -215,7 +225,7 @@ class CtpGateway(BaseGateway):
         msg: str = f"{msg}，代码：{error_id}，信息：{error_msg}"
         self.write_log(msg)
 
-    def process_timer_event(self, event) -> None:
+    def process_timer_event(self, _) -> None:
         """定时事件处理"""
         self.count += 1
         if self.count < 2:
@@ -432,6 +442,9 @@ class CtpTdApi(TdApi):
         self.trade_data: List[dict] = []
         self.positions: Dict[str, PositionData] = {}
         self.sysid_orderid_map: Dict[str, str] = {}
+        self.commission_req_symbol_map: Dict[int, Tuple[str, Exchange]] = {}
+
+        self.margin_cache: Dict[str, Dict[str, float]] = {}
 
     def onFrontConnected(self) -> None:
         """服务器连接成功回报"""
@@ -604,6 +617,8 @@ class CtpTdApi(TdApi):
                 gateway_name=self.gateway_name,
             )
 
+            self.margin_cache[data["InstrumentID"]] = {"LongMarginRatio": data["LongMarginRatio"], "ShortMarginRatio": data["ShortMarginRatio"]}
+
             # 期权相关
             if contract.product == Product.OPTION:
                 # 移除郑商所期权产品名称带有的C/P后缀
@@ -710,6 +725,47 @@ class CtpTdApi(TdApi):
             gateway_name=self.gateway_name,
         )
         self.gateway.on_trade(trade)
+
+    def onRspQryInstrumentMarginRate(self, data: dict, error: dict, reqid: int, last: bool):
+        """
+        查询保证金率
+        """
+        print(f"MarginRate {data}")
+        print(f"error {error}")
+
+        if data:
+            margin = MarginRate(
+                symbol = data['InstrumentID'],
+                exchange = EXCHANGE_CTP2VT.get(data["ExchangeID"], Exchange.UNKNOWN),
+                long_margin_rate=data["LongMarginRatioByMoney"],
+                long_margin_perlot=data["LongMarginRatioByVolume"],
+                short_margin_rate=data["ShortMarginRatioByMoney"],
+                short_margin_perlot=data["ShortMarginRatioByVolume"],
+                gateway_name=self.gateway_name
+            )
+            if data['IsRelative'] and margin.symbol in self.margin_cache:
+                margin.long_margin_rate += self.margin_cache[margin.symbol]["LongMarginRatio"]
+                margin.short_margin_rate += self.margin_cache[margin.symbol]["ShortMarginRatio"]
+            self.gateway.on_margin_rate(margin)
+
+    def onRspQryInstrumentCommissionRate(self, data: dict, error: dict, reqid: int, last: bool):    # hxxjava add
+        """查询合约手续费率"""
+        print(f"CommissionRate {data}")
+        print(f"error {error}")
+        if data:
+            req_symbol, req_exchange = self.commission_req_symbol_map.pop(reqid, ("", Exchange.UNKNOWN))
+            commission = Commission(
+                symbol = req_symbol if data['InstrumentID'] in req_symbol else data['InstrumentID'],
+                exchange = EXCHANGE_CTP2VT.get(data["ExchangeID"], req_exchange),
+                ratio_bymoney=data['OpenRatioByMoney'],
+                ratio_byvolume=data['OpenRatioByVolume'],
+                close_ratio_bymoney=data['CloseRatioByMoney'],
+                close_ratio_byvolume=data['CloseRatioByVolume'],
+                close_today_ratio_bymoney=data['CloseTodayRatioByMoney'],
+                close_today_ratio_byvolume=data['CloseTodayRatioByVolume'],
+                gateway_name=self.gateway_name
+            )
+            self.gateway.on_commission(commission)
 
     def connect(self, address: str, userid: str, password: str, brokerid: str, auth_code: str, appid: str) -> None:
         """连接服务器"""
@@ -839,6 +895,53 @@ class CtpTdApi(TdApi):
         self.reqid += 1
         self.reqQryInvestorPosition(ctp_req, self.reqid)
 
+    def query_commission(self,req:SubscribeRequest):
+        """ 查询手续费率
+        """
+        if not req.symbol in symbol_contract_map:
+            self.gateway.write_log(f"查询佣金费率：找不到该合约")
+            return
+        #手续费率查询字典
+        commission_req_dict = {
+            'BrokerID': self.brokerid,
+            'InvestorID': self.userid,
+            'InstrumentID': req.symbol,
+            'ExchangeID': req.exchange.value,
+        }
+
+        self.reqid += 1
+        #请求查询手续费率
+        count_down = 10
+        while count_down > 0:
+            if self.reqQryInstrumentCommissionRate(commission_req_dict, self.reqid) == 0:
+                self.commission_req_symbol_map[self.reqid] = (req.symbol, req.exchange)
+                break
+            count_down-=1
+            sleep(0.2)
+        else:
+            self.gateway.write_log("查询手续费率失败")
+
+    def query_margin(self, req: SubscribeRequest):
+        if not req.symbol in symbol_contract_map:
+            self.gateway.write_log(f"查询保证金率：找不到该合约")
+            return
+
+        self.reqid += 1
+        margin_req_dict = {
+            'BrokerID': self.brokerid,
+            'InvestorID': self.userid,
+            'InstrumentID': req.symbol,
+            'ExchangeID': req.exchange.value,
+            'HedgeFlag': THOST_FTDC_HF_Speculation,
+        }
+
+        count_down = 10
+        while self.reqQryInstrumentMarginRate(margin_req_dict, self.reqid) != 0:
+            count_down-=1
+            if count_down < 1:
+                self.gateway.write_log("查询保证金率失败")
+                break
+            sleep(0.2)
     def close(self) -> None:
         """关闭连接"""
         if self.connect_status:
