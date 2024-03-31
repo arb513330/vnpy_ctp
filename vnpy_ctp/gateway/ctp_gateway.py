@@ -1,7 +1,7 @@
 import sys
 from datetime import datetime
 from time import sleep
-from typing import Dict, List, Tuple, Any
+from typing import Any
 from pathlib import Path
 
 from vnpy.event import EventEngine
@@ -18,7 +18,7 @@ from vnpy.trader.object import (
     CancelRequest,
     SubscribeRequest,
     MarginRate,
-Commission,
+    Commission,
 )
 from vnpy.trader.utility import get_folder_path, ZoneInfo
 from vnpy.trader.ui.utilities import RegisteredQWidgetType
@@ -60,7 +60,7 @@ from ..api import (
 
 
 # 委托状态映射
-STATUS_CTP2VT: Dict[str, Status] = {
+STATUS_CTP2VT: dict[str, Status] = {
     THOST_FTDC_OST_NoTradeQueueing: Status.NOTTRADED,
     THOST_FTDC_OST_PartTradedQueueing: Status.PARTTRADED,
     THOST_FTDC_OST_AllTraded: Status.ALLTRADED,
@@ -69,31 +69,31 @@ STATUS_CTP2VT: Dict[str, Status] = {
 }
 
 # 多空方向映射
-DIRECTION_VT2CTP: Dict[Direction, str] = {Direction.LONG: THOST_FTDC_D_Buy, Direction.SHORT: THOST_FTDC_D_Sell}
-DIRECTION_CTP2VT: Dict[str, Direction] = {v: k for k, v in DIRECTION_VT2CTP.items()}
+DIRECTION_VT2CTP: dict[Direction, str] = {Direction.LONG: THOST_FTDC_D_Buy, Direction.SHORT: THOST_FTDC_D_Sell}
+DIRECTION_CTP2VT: dict[str, Direction] = {v: k for k, v in DIRECTION_VT2CTP.items()}
 DIRECTION_CTP2VT[THOST_FTDC_PD_Long] = Direction.LONG
 DIRECTION_CTP2VT[THOST_FTDC_PD_Short] = Direction.SHORT
 
 # 委托类型映射
-ORDERTYPE_VT2CTP: Dict[OrderType, tuple] = {
+ORDERTYPE_VT2CTP: dict[OrderType, tuple] = {
     OrderType.LIMIT: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
     OrderType.MARKET: (THOST_FTDC_OPT_AnyPrice, THOST_FTDC_TC_GFD, THOST_FTDC_VC_AV),
     OrderType.FAK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_AV),
     OrderType.FOK: (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_TC_IOC, THOST_FTDC_VC_CV),
 }
-ORDERTYPE_CTP2VT: Dict[Tuple, OrderType] = {v: k for k, v in ORDERTYPE_VT2CTP.items()}
+ORDERTYPE_CTP2VT: dict[tuple, OrderType] = {v: k for k, v in ORDERTYPE_VT2CTP.items()}
 
 # 开平方向映射
-OFFSET_VT2CTP: Dict[Offset, str] = {
+OFFSET_VT2CTP: dict[Offset, str] = {
     Offset.OPEN: THOST_FTDC_OF_Open,
     Offset.CLOSE: THOST_FTDC_OFEN_Close,
     Offset.CLOSETODAY: THOST_FTDC_OFEN_CloseToday,
     Offset.CLOSEYESTERDAY: THOST_FTDC_OFEN_CloseYesterday,
 }
-OFFSET_CTP2VT: Dict[str, Offset] = {v: k for k, v in OFFSET_VT2CTP.items()}
+OFFSET_CTP2VT: dict[str, Offset] = {v: k for k, v in OFFSET_VT2CTP.items()}
 
 # 交易所映射
-EXCHANGE_CTP2VT: Dict[str, Exchange] = {
+EXCHANGE_CTP2VT: dict[str, Exchange] = {
     "CFFEX": Exchange.CFFEX,
     "SHFE": Exchange.SHFE,
     "CZCE": Exchange.CZCE,
@@ -103,7 +103,7 @@ EXCHANGE_CTP2VT: Dict[str, Exchange] = {
 }
 
 # 产品类型映射
-PRODUCT_CTP2VT: Dict[str, Product] = {
+PRODUCT_CTP2VT: dict[str, Product] = {
     THOST_FTDC_PC_Futures: Product.FUTURES,
     THOST_FTDC_PC_Options: Product.OPTION,
     THOST_FTDC_PC_SpotOption: Product.OPTION,
@@ -111,7 +111,7 @@ PRODUCT_CTP2VT: Dict[str, Product] = {
 }
 
 # 期权类型映射
-OPTIONTYPE_CTP2VT: Dict[str, OptionType] = {
+OPTIONTYPE_CTP2VT: dict[str, OptionType] = {
     THOST_FTDC_CP_CallOptions: OptionType.CALL,
     THOST_FTDC_CP_PutOptions: OptionType.PUT,
 }
@@ -121,7 +121,7 @@ MAX_FLOAT = sys.float_info.max  # 浮点数极限值
 CHINA_TZ = ZoneInfo("Asia/Shanghai")  # 中国时区
 
 # 合约数据全局缓存字典
-symbol_contract_map: Dict[str, ContractData] = {}
+symbol_contract_map: dict[str, ContractData] = {}
 
 
 class CtpGateway(BaseGateway):
@@ -131,7 +131,7 @@ class CtpGateway(BaseGateway):
 
     default_name: str = "CTP"
 
-    default_setting: Dict[str, Tuple[str, Any]] = {
+    default_setting: dict[str, tuple[str, Any]] = {
         "行情用户名": ("", RegisteredQWidgetType.GW_EDITBOX),
         "行情密码": ("", RegisteredQWidgetType.GW_PASSWORDBOX),
         "行情经纪商代码": ("", RegisteredQWidgetType.GW_EDITBOX),
@@ -144,7 +144,7 @@ class CtpGateway(BaseGateway):
         "授权编码": ("", RegisteredQWidgetType.GW_PASSWORDBOX),
     }
 
-    exchanges: List[str] = list(EXCHANGE_CTP2VT.values())
+    exchanges: list[str] = list(EXCHANGE_CTP2VT.values())
 
     def __init__(self, event_engine: EventEngine, gateway_name: str) -> None:
         """构造函数"""
@@ -265,7 +265,7 @@ class CtpMdApi(MdApi):
         self.password: str = ""
         self.brokerid: str = ""
 
-        self.accu_volumes: Dict[str, float] = {}
+        self.accu_volumes: dict[str, float] = {}
 
         self.current_date: str = datetime.now().strftime("%Y%m%d")
 
@@ -438,13 +438,13 @@ class CtpTdApi(TdApi):
 
         self.frontid: int = 0
         self.sessionid: int = 0
-        self.order_data: List[dict] = []
-        self.trade_data: List[dict] = []
-        self.positions: Dict[str, PositionData] = {}
-        self.sysid_orderid_map: Dict[str, str] = {}
-        self.commission_req_symbol_map: Dict[int, Tuple[str, Exchange]] = {}
+        self.order_data: list[dict] = []
+        self.trade_data: list[dict] = []
+        self.positions: dict[str, PositionData] = {}
+        self.sysid_orderid_map: dict[str, str] = {}
+        self.commission_req_symbol_map: dict[int, tuple[str, Exchange]] = {}
 
-        self.margin_cache: Dict[str, Dict[str, float]] = {}
+        self.margin_cache: dict[str, dict[str, float]] = {}
 
     def onFrontConnected(self) -> None:
         """服务器连接成功回报"""
@@ -528,8 +528,7 @@ class CtpTdApi(TdApi):
 
             if not n:
                 break
-            else:
-                sleep(1)
+            sleep(1)
 
     def onRspQryInvestorPosition(self, data: dict, error: dict, reqid: int, last: bool) -> None:
         """持仓查询回报"""
@@ -617,7 +616,10 @@ class CtpTdApi(TdApi):
                 gateway_name=self.gateway_name,
             )
 
-            self.margin_cache[data["InstrumentID"]] = {"LongMarginRatio": data["LongMarginRatio"], "ShortMarginRatio": data["ShortMarginRatio"]}
+            self.margin_cache[data["InstrumentID"]] = {
+                "LongMarginRatio": data["LongMarginRatio"],
+                "ShortMarginRatio": data["ShortMarginRatio"],
+            }
 
             # 期权相关
             if contract.product == Product.OPTION:
@@ -642,12 +644,12 @@ class CtpTdApi(TdApi):
             self.contract_inited = True
             self.gateway.write_log("合约信息查询成功")
 
-            for data in self.order_data:
-                self.onRtnOrder(data)
+            for o_data in self.order_data:
+                self.onRtnOrder(o_data)
             self.order_data.clear()
 
-            for data in self.trade_data:
-                self.onRtnTrade(data)
+            for t_data in self.trade_data:
+                self.onRtnTrade(t_data)
             self.trade_data.clear()
 
     def onRtnOrder(self, data: dict) -> None:
@@ -735,35 +737,35 @@ class CtpTdApi(TdApi):
 
         if data:
             margin = MarginRate(
-                symbol = data['InstrumentID'],
-                exchange = EXCHANGE_CTP2VT.get(data["ExchangeID"], Exchange.UNKNOWN),
+                symbol=data["InstrumentID"],
+                exchange=EXCHANGE_CTP2VT.get(data["ExchangeID"], Exchange.UNKNOWN),
                 long_margin_rate=data["LongMarginRatioByMoney"],
                 long_margin_perlot=data["LongMarginRatioByVolume"],
                 short_margin_rate=data["ShortMarginRatioByMoney"],
                 short_margin_perlot=data["ShortMarginRatioByVolume"],
-                gateway_name=self.gateway_name
+                gateway_name=self.gateway_name,
             )
-            if data['IsRelative'] and margin.symbol in self.margin_cache:
+            if data["IsRelative"] and margin.symbol in self.margin_cache:
                 margin.long_margin_rate += self.margin_cache[margin.symbol]["LongMarginRatio"]
                 margin.short_margin_rate += self.margin_cache[margin.symbol]["ShortMarginRatio"]
             self.gateway.on_margin_rate(margin)
 
-    def onRspQryInstrumentCommissionRate(self, data: dict, error: dict, reqid: int, last: bool):    # hxxjava add
+    def onRspQryInstrumentCommissionRate(self, data: dict, error: dict, reqid: int, last: bool):  # hxxjava add
         """查询合约手续费率"""
         print(f"CommissionRate {data}")
         print(f"error {error}")
         if data:
             req_symbol, req_exchange = self.commission_req_symbol_map.pop(reqid, ("", Exchange.UNKNOWN))
             commission = Commission(
-                symbol = req_symbol if data['InstrumentID'] in req_symbol else data['InstrumentID'],
-                exchange = EXCHANGE_CTP2VT.get(data["ExchangeID"], req_exchange),
-                ratio_bymoney=data['OpenRatioByMoney'],
-                ratio_byvolume=data['OpenRatioByVolume'],
-                close_ratio_bymoney=data['CloseRatioByMoney'],
-                close_ratio_byvolume=data['CloseRatioByVolume'],
-                close_today_ratio_bymoney=data['CloseTodayRatioByMoney'],
-                close_today_ratio_byvolume=data['CloseTodayRatioByVolume'],
-                gateway_name=self.gateway_name
+                symbol=req_symbol if data["InstrumentID"] in req_symbol else data["InstrumentID"],
+                exchange=EXCHANGE_CTP2VT.get(data["ExchangeID"], req_exchange),
+                ratio_bymoney=data["OpenRatioByMoney"],
+                ratio_byvolume=data["OpenRatioByVolume"],
+                close_ratio_bymoney=data["CloseRatioByMoney"],
+                close_ratio_byvolume=data["CloseRatioByVolume"],
+                close_today_ratio_bymoney=data["CloseTodayRatioByMoney"],
+                close_today_ratio_byvolume=data["CloseTodayRatioByVolume"],
+                gateway_name=self.gateway_name,
             )
             self.gateway.on_commission(commission)
 
@@ -895,53 +897,53 @@ class CtpTdApi(TdApi):
         self.reqid += 1
         self.reqQryInvestorPosition(ctp_req, self.reqid)
 
-    def query_commission(self,req:SubscribeRequest):
-        """ 查询手续费率
-        """
-        if not req.symbol in symbol_contract_map:
-            self.gateway.write_log(f"查询佣金费率：找不到该合约")
+    def query_commission(self, req: SubscribeRequest):
+        """查询手续费率"""
+        if req.symbol not in symbol_contract_map:
+            self.gateway.write_log(f"查询佣金费率：找不到该合约{req.symbol}")
             return
-        #手续费率查询字典
+        # 手续费率查询字典
         commission_req_dict = {
-            'BrokerID': self.brokerid,
-            'InvestorID': self.userid,
-            'InstrumentID': req.symbol,
-            'ExchangeID': req.exchange.value,
+            "BrokerID": self.brokerid,
+            "InvestorID": self.userid,
+            "InstrumentID": req.symbol,
+            "ExchangeID": req.exchange.value,
         }
 
         self.reqid += 1
-        #请求查询手续费率
+        # 请求查询手续费率
         count_down = 10
         while count_down > 0:
             if self.reqQryInstrumentCommissionRate(commission_req_dict, self.reqid) == 0:
                 self.commission_req_symbol_map[self.reqid] = (req.symbol, req.exchange)
                 break
-            count_down-=1
+            count_down -= 1
             sleep(0.2)
         else:
             self.gateway.write_log("查询手续费率失败")
 
     def query_margin(self, req: SubscribeRequest):
-        if not req.symbol in symbol_contract_map:
-            self.gateway.write_log(f"查询保证金率：找不到该合约")
+        if req.symbol not in symbol_contract_map:
+            self.gateway.write_log(f"查询保证金率：找不到该合约{req.symbol}")
             return
 
         self.reqid += 1
         margin_req_dict = {
-            'BrokerID': self.brokerid,
-            'InvestorID': self.userid,
-            'InstrumentID': req.symbol,
-            'ExchangeID': req.exchange.value,
-            'HedgeFlag': THOST_FTDC_HF_Speculation,
+            "BrokerID": self.brokerid,
+            "InvestorID": self.userid,
+            "InstrumentID": req.symbol,
+            "ExchangeID": req.exchange.value,
+            "HedgeFlag": THOST_FTDC_HF_Speculation,
         }
 
         count_down = 10
         while self.reqQryInstrumentMarginRate(margin_req_dict, self.reqid) != 0:
-            count_down-=1
+            count_down -= 1
             if count_down < 1:
                 self.gateway.write_log("查询保证金率失败")
                 break
             sleep(0.2)
+
     def close(self) -> None:
         """关闭连接"""
         if self.connect_status:
