@@ -82,5 +82,5 @@ def get_ext_modules() -> list:
 
     return [vnctptd, vnctpmd]
 
-    
+
 setup(ext_modules=get_ext_modules())
