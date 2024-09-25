@@ -281,7 +281,7 @@ class CtpMdApi(MdApi):
 
     def onRspUserLogin(self, data: dict, error: dict, reqid: int, last: bool) -> None:
         """用户登录请求回报"""
-        if not error["ErrorID"]:
+        if not error.get("ErrorID", None):
             self.login_status = True
             self.gateway.write_log("行情服务器登录成功")
 
@@ -695,6 +695,7 @@ class CtpTdApi(TdApi):
             datetime=dt,
             gateway_name=self.gateway_name,
         )
+
         self.gateway.on_order(order)
 
         self.sysid_orderid_map[data["OrderSysID"]] = orderid
@@ -732,9 +733,6 @@ class CtpTdApi(TdApi):
         """
         查询保证金率
         """
-        print(f"MarginRate {data}")
-        print(f"error {error}")
-
         if data:
             margin = MarginRate(
                 symbol=data["InstrumentID"],
@@ -752,8 +750,6 @@ class CtpTdApi(TdApi):
 
     def onRspQryInstrumentCommissionRate(self, data: dict, error: dict, reqid: int, last: bool):  # hxxjava add
         """查询合约手续费率"""
-        print(f"CommissionRate {data}")
-        print(f"error {error}")
         if data:
             req_symbol, req_exchange = self.commission_req_symbol_map.pop(reqid, ("", Exchange.UNKNOWN))
             commission = Commission(
