@@ -6412,3 +6412,4 @@ CThostFtdcSyncDeltaRULEInterParameterField = {
     "ActionDirection": "char",
     "SyncDeltaSequenceNo": "int",
 }
+
